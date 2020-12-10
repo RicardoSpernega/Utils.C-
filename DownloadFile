@@ -1,0 +1,56 @@
+        public ActionResult BaixarRelatorioImportacaoRedeIndireta(int idUnimed, int idTipoPrestador, string tipoMovimentacao)//int idUnimed, int idTipoPrestador, string tipoMovimentacao)
+        {
+            try
+            {
+                var relatorio = relatorioImportacaoRedeIndiretaBD.Listar();
+
+                List<String> listaArquivos = new List<String>();
+
+                var contador = 0;
+                var termina = true;
+
+                if (Directory.Exists(fileZip))
+                    Directory.Delete(fileZip, true);
+
+                if (Directory.Exists(file))
+                    Directory.Delete(file, true);
+
+                Directory.CreateDirectory(fileZip);
+                Directory.CreateDirectory(file);
+
+                while (termina)
+                {
+                    var arquivoPath = string.Concat(file, "Relatorio" + contador + ".csv");
+                    var a = relatorio.Skip(500000 * contador);
+                    var auxRelatorio = a.Take(500000);
+
+                    if (auxRelatorio.Count() != 500000)
+                        termina = false;
+
+                    using (FileStream fs = new FileStream(arquivoPath, FileMode.CreateNew))
+                    {
+                        using (StreamWriter tw = new StreamWriter(fs, Encoding.GetEncoding("ISO-8859-1")))
+                        {
+                            tw.Write($"Código da Unimed;");
+                            ... your columms result
+                            }
+                        }
+                    }
+
+                    contador++;
+                }
+
+                var zipFile = string.Concat(fileZip, "Arquivos.zip");
+
+                ZipFile.CreateFromDirectory(file, zipFile);
+                var byteZip = System.IO.File.ReadAllBytes(zipFile);
+
+                return File(byteZip.ToArray(), "application/zip");
+            }
+
+             catch (Exception ex)
+            {
+                TratarRetorno(ex);
+                return Json("Não foi possível realizar a ação. " + ex.Message);
+            }
+        }
