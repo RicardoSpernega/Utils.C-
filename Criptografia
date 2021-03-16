@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Security.Cryptography;
+using System.Text;
+using System.Web;
+
+
+namespace TechsCorp.Unimeds.Criptografias
+{
+    /// <summary>
+    /// Summary description for Criptografia64.
+    /// </summary>
+    public class Criptografia64
+    {
+        public Criptografia64()
+        {
+            //
+            // TODO: Add constructor logic here
+            //
+        }
+
+        static protected string Chave64 = System.Configuration.ConfigurationManager.AppSettings["Chave64"];
+
+        static public string Criptografar<T>(T id)
+        {
+            if (EqualityComparer<T>.Default.Equals(id, default(T)))
+                return null;
+
+            if (typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return criptografar(id.ToString());
+
+            throw new Exception("Para este tipo de dado utilize o método criptografar(string)");
+        }
+
+        static public T Descriptografar<T>(string texto)
+        {
+            if (string.IsNullOrWhiteSpace(texto))
+                return default(T);
+
+            if (texto.Contains("%"))
+                texto = HttpUtility.UrlDecode(texto);
+
+            return TConverter.ChangeType<T>(descriptografar(texto));
+        }
+
+        internal static class TConverter
+        {
+            public static T ChangeType<T>(object value)
+            {
+                return (T)ChangeType(typeof(T), value);
+            }
+
+            public static object ChangeType(Type t, object value)
+            {
+                TypeConverter tc = TypeDescriptor.GetConverter(t);
+                return tc.ConvertFrom(value);
+            }
+
+            public static void RegisterTypeConverter<T, TC>() where TC : TypeConverter
+            {
+
+                TypeDescriptor.AddAttributes(typeof(T), new TypeConverterAttribute(typeof(TC)));
+            }
+        }
+
+
+        static public string criptografar(string texto)
+        {
+            TripleDESCryptoServiceProvider decript = new TripleDESCryptoServiceProvider();
+            MD5CryptoServiceProvider hashMD5 = new MD5CryptoServiceProvider();
+
+            decript.Key = hashMD5.ComputeHash(ASCIIEncoding.ASCII.GetBytes(Chave64));
+            decript.Mode = CipherMode.ECB;
+
+            ICryptoTransform desencrypt = decript.CreateEncryptor();
+            ASCIIEncoding AscEncoding = new ASCIIEncoding();
+            byte[] buffer = ASCIIEncoding.ASCII.GetBytes(texto);
+            return Convert.ToBase64String(desencrypt.TransformFinalBlock(buffer, 0, buffer.Length));
+        }
+
+        static public string descriptografar(string texto, bool validaTrilha = false)//Valida trilha paleativo pois algumas trilhas não estao sendo descriptografadas.
+        {
+            string retorno = string.Empty;
+
+            if (!string.IsNullOrEmpty(texto))
+            {
+                bool contemEspaco = texto.Contains(" ");//Para tratar textos com espaço em branco.
+
+                try
+                {
+                    TripleDESCryptoServiceProvider decript = new TripleDESCryptoServiceProvider();
+                    MD5CryptoServiceProvider hashMD5 = new MD5CryptoServiceProvider();
+                    decript.Key = hashMD5.ComputeHash(ASCIIEncoding.ASCII.GetBytes(Chave64));
+                    decript.Mode = CipherMode.ECB;
+                    ICryptoTransform desencrypt = decript.CreateDecryptor();
+                    byte[] buffer = Convert.FromBase64String(texto);
+
+                    retorno = ASCIIEncoding.ASCII.GetString(desencrypt.TransformFinalBlock(buffer, 0, buffer.Length));
+
+                    return retorno;
+                }
+                catch (System.FormatException)
+                {
+                    if (contemEspaco)
+                    {
+                        //Evita mexer no método que é chamado em toda parte. Nem todo espaçoe em branco gera erro.
+                        texto = texto.Replace(' ', '+');//Trata Comprimento inválido para uma matriz ou uma cadeia de caracteres de Base 64.
+                        retorno = descriptografar(texto);
+                    }
+
+                    return retorno;
+                }
+                catch (Exception ex)
+                {
+                    if (contemEspaco)
+                    {
+                        //Evita mexer no método que é chamado em toda parte. Nem todo espaçoe em branco gera erro.
+                        texto = texto.Replace(' ', '+');//Trata Comprimento inválido para uma matriz ou uma cadeia de caracteres de Base 64.
+                        retorno = descriptografar(texto);
+                    }
+
+                    if (string.IsNullOrEmpty(retorno))
+                    {
+                        try
+                        {
+                            //Pode ser erro no encoding.
+                            byte[] data = Convert.FromBase64String(texto);
+                            retorno = Encoding.UTF8.GetString(data);
+                        }
+                        catch
+                        {
+                            return (validaTrilha ? "0" : "");
+                        }
+                    }
+
+                    return retorno;
+                }
+            }
+            else
+            {
+                return retorno;
+            }
+
+        }
+    }
+}
